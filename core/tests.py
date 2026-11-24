@@ -1,9 +1,31 @@
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from cuentas.models import Usuario
 from vacantes.models import Vacante
+
+
+class InfrastructureEndpointTests(TestCase):
+    def test_health_is_live_and_does_not_require_database(self):
+        response = self.client.get('/health/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ok')
+        self.assertIn('timestamp', response.json())
+
+    def test_ready_checks_database_without_returning_details(self):
+        response = self.client.get('/ready/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'status': 'ready', 'database': 'available'})
+
+    def test_infrastructure_endpoint_returns_only_safe_instance_metadata(self):
+        with override_settings(ALLOWED_HOSTS=['testserver']):
+            response = self.client.get('/api/infraestructura/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ok')
+        self.assertIn('instance', response.json())
+        self.assertNotIn('DATABASE_URL', response.json())
+        self.assertNotIn('SECRET_KEY', response.json())
 
 
 class InicioYEstadisticasTests(TestCase):

@@ -1,13 +1,42 @@
+import os
+
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import DatabaseError, connection
 from django.db.models import Count
+from django.http import JsonResponse
 from django.shortcuts import render
+from django.utils import timezone
 
 from cuentas.models import Usuario
 from empresas.models import Empresa
 from estudiantes.models import PerfilEstudiante
 from postulaciones.models import Postulacion
 from vacantes.models import Favorito, Vacante
+
+
+def health(request):
+    return JsonResponse({'status': 'ok', 'timestamp': timezone.now().isoformat()})
+
+
+def ready(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except DatabaseError:
+        return JsonResponse({'status': 'unavailable', 'database': 'unavailable'}, status=503)
+    return JsonResponse({'status': 'ready', 'database': 'available'})
+
+
+def infrastructure_status(request):
+    return JsonResponse({
+        'application': 'Conecta UTC',
+        'instance': os.environ.get('INSTANCE_ID', 'local'),
+        'status': 'ok',
+        'timestamp': timezone.now().isoformat(),
+        'version': os.environ.get('APP_VERSION', 'desarrollo'),
+    })
 
 
 def inicio(request):

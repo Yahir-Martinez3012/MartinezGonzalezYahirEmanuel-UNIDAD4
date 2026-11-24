@@ -2,7 +2,7 @@ name: Pruebas
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'v0/**']
   pull_request:
     branches: [main]
 
@@ -11,7 +11,27 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.12', '3.14']
+        python-version: ['3.13']
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: conecta_test
+          POSTGRES_USER: conecta
+          POSTGRES_PASSWORD: ci-password-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U conecta -d conecta_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      SECRET_KEY: ci-only-not-for-deployment-long-random-key-example-12345678901234567890
+      DEBUG: 'False'
+      DATABASE_URL: postgres://conecta:ci-password-only@127.0.0.1:5432/conecta_test
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      CSRF_TRUSTED_ORIGINS: https://localhost
     steps:
       - uses: actions/checkout@v4
 
@@ -24,9 +44,10 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements-dev.txt
 
-      - name: Verificar migraciones y configuración
+      - name: Verificar configuración y migraciones
         run: |
           python manage.py check
+          python manage.py check --deploy
           python manage.py makemigrations --check --dry-run
 
       - name: Ejecutar pruebas con cobertura

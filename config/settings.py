@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.csp import CSP
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -30,11 +31,18 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'clave-solo-para-desarrollo-local')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-RENDER_HOST = os.environ.get('RENDER_EXTERNAL_HOSTNAME')   # Render lo define automáticamente
-if RENDER_HOST:
-    ALLOWED_HOSTS.append(RENDER_HOST)
-    CSRF_TRUSTED_ORIGINS = [f'https://{RENDER_HOST}']
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if host.strip()]
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+
+for host_variable in ('RENDER_EXTERNAL_HOSTNAME', 'VERCEL_URL', 'VERCEL_PROJECT_PRODUCTION_URL'):
+    deployment_host = os.environ.get(host_variable)
+    if deployment_host:
+        deployment_host = deployment_host.removeprefix('https://').removeprefix('http://').rstrip('/')
+        if deployment_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(deployment_host)
+        deployment_origin = f'https://{deployment_host}'
+        if deployment_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(deployment_origin)
 
 if not DEBUG and SECRET_KEY.startswith('clave-solo-para-desarrollo'):
     raise RuntimeError('Define la variable de entorno SECRET_KEY antes de ejecutar con DEBUG=False.')
@@ -98,18 +106,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+if not DEBUG and not DATABASE_URL:
+    raise ImproperlyConfigured('DATABASE_URL es obligatorio con DEBUG=False; SQLite no está permitido en producción.')
+
+if DATABASE_URL:
+    DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60, conn_health_checks=True)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
-
-
-# En producción la base de datos se define con DATABASE_URL (p. ej. PostgreSQL en Neon o Render);
-# sin esa variable se usa SQLite local. SQLite en un servidor con disco efímero pierde los datos al reiniciar.
-if os.environ.get('DATABASE_URL'):
-    DATABASES['default'] = dj_database_url.parse(os.environ['DATABASE_URL'], conn_max_age=600)
 
 
 # Password validation
@@ -152,14 +161,8 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
-# Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
-
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+# La aplicación entrega avisos exclusivamente por la API HTTPS de Resend (servicios/correo.py).
+# No se configura un backend de correo local de Django para producción.
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -179,10 +182,11 @@ LOGOUT_REDIRECT_URL = 'inicio'
 if not DEBUG:
     MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')   # sirve los archivos estáticos
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 3600
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '15552000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() == 'true'
 
 # Protección contra fuerza bruta (ver cuentas/seguridad.py)
 LOGIN_MAX_INTENTOS = 5            # intentos fallidos permitidos...
