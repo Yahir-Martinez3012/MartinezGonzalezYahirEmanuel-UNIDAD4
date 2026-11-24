@@ -1,51 +1,45 @@
-# Arquitectura de Conecta UTC
+# Arquitectura de Conecta UTC — Unidad 4
 
-## Estilo arquitectónico
+## Objetivo
 
-Aplicación web monolítica **modular**, con el patrón **MVT** (Modelo-Vista-Plantilla) de Django, organizada en capas:
+Mantener la aplicación Django original de la bolsa de trabajo UTC e incorporar una forma reproducible de ejecutarla en contenedores con base de datos PostgreSQL, proxy inverso y dos procesos de aplicación.
 
-| Capa | Responsabilidad | Dónde está |
-|---|---|---|
-| Presentación | Plantillas HTML (Bootstrap 5), JavaScript y CSS | `templates/`, `static/` |
-| Interfaz web y API | Vistas, formularios, serializadores, permisos | `*/views.py`, `*/forms.py`, `api/` |
-| Lógica de negocio | Reglas de postulación, aprobación, bloqueo | `postulaciones/servicios.py`, `cuentas/seguridad.py`, modelos |
-| Integración | Adaptadores de servicios externos | `servicios/` |
-| Datos | Modelos y migraciones (SQLite en local, PostgreSQL en producción) | `*/models.py`, `*/migrations/` |
+## Docker Compose
 
-Cada aplicación de Django agrupa un módulo del negocio (`cuentas`, `catalogo`, `estudiantes`, `empresas`, `vacantes`, `postulaciones`) y la API vive en `api/`. Las dependencias van en una sola dirección: `catalogo` → `cuentas` → `estudiantes`/`empresas` → `vacantes` → `postulaciones` → `api`/`core`.
+```mermaid
+flowchart LR
+  U[Usuario] --> N[Nginx :8080<br/>Round Robin]
+  N --> A1[app1<br/>Gunicorn]
+  N --> A2[app2<br/>Gunicorn]
+  A1 --> DB[(PostgreSQL<br/>volumen persistente)]
+  A2 --> DB
+  M[migrate<br/>migraciones una vez] --> DB
+  M --> S[(static_data)]
+  N --> S
+```
 
-## Patrones de diseño aplicados
+`backend` es una red interna entre aplicaciones y DB; solo Nginx publica un puerto. `migrate` es un servicio de una sola ejecución requerido por ambas instancias, evitando migraciones concurrentes. `static_data` es generado en ese paso y montado de solo lectura en las instancias y Nginx. La persistencia de PostgreSQL vive en `postgres_data`.
 
-| Patrón | Para qué se usa | Dónde |
-|---|---|---|
-| MVT (variante de MVC) | Separar datos, lógica y presentación | Todo el proyecto |
-| Decorator | Exigir sesión y rol antes de ejecutar una vista | `cuentas/decorators.py` (`rol_requerido`) |
-| Repository / Manager | Centralizar la consulta «vacantes públicas» | `vacantes/models.py` (`VacanteQuerySet.abiertas`) |
-| Adapter | Ocultar URLs, claves y formatos de cada servicio externo | `servicios/recaptcha.py`, `geocodificacion.py`, `correo.py` |
-| Observer | Reaccionar a eventos sin acoplar el código (correos, bitácora) | `postulaciones/signals.py`, `cuentas/signals.py` |
-| Service Layer | Una sola implementación de las reglas, usada por la web y la API | `postulaciones/servicios.py` |
-| Mixin | Reutilizar comportamiento en formularios (estilos, captcha) | `cuentas/forms.py` (`BootstrapMixin`, `CaptchaMixin`) |
-| Command | Tareas administrativas ejecutables | `poblar_demo`, `geocodificar_vacantes` |
+Nginx usa Round Robin (predeterminado del `upstream`) y reintentos para fallos de conexión/timeout. Ante una caída abrupta, la primera solicitud puede ser la que detecta el fallo; el proxy excluye temporalmente ese upstream con `max_fails`/`fail_timeout`. Esto no equivale a tolerancia sin errores en todos los casos.
 
-## Frameworks y librerías
+## Producción en Vercel
 
-Django 6.1 (aplicación), Django REST Framework (API), drf-spectacular (OpenAPI/Swagger), Bootstrap 5 y Leaflet (interfaz), WhiteNoise y gunicorn (servidor), psycopg y dj-database-url (PostgreSQL), requests (servicios externos).
+```mermaid
+flowchart LR
+  U[Usuario HTTPS] --> V[Vercel Edge / TLS administrado]
+  V --> F[Runtime administrado Python/Django]
+  F --> DB[(PostgreSQL administrado<br/>Neon)]
+  F --> ST[Static files recopilados<br/>WhiteNoise / runtime]
+```
 
-## Decisiones de diseño relevantes
+Este es el diseño de despliegue de Django detectado por Vercel; no despliega el `docker-compose.yml`, no ejecuta Gunicorn de forma permanente y no usa Nginx. La distribución y escalado de funciones corresponden a Vercel. El `DATABASE_URL` de Neon y las variables Django se configuran en el proyecto Vercel, nunca en Git.
 
-- **CV en la base de datos (`ArchivoCV`)**: los servicios gratuitos de hosting tienen disco efímero, por lo que un archivo en disco se pierde al reiniciar. Se guarda en un modelo aparte para no cargar archivos pesados en cada consulta del perfil. Para un volumen grande convendría un almacenamiento de objetos (S3, Cloudinary).
-- **Bloqueo por usuario y no por IP**: frena ataques distribuidos; la contrapartida es que alguien podría bloquear a propósito una cuenta ajena unos minutos.
-- **reCAPTCHA «falla cerrado»**: si Google no responde, la solicitud se rechaza.
-- **La API solo acepta token**: no usa sesiones, por lo que no está expuesta a CSRF.
-- **Los servicios externos nunca rompen la aplicación**: timeouts de 5 s, errores capturados y funcionamiento sin claves configuradas.
+## Endpoints de operación
 
-## Esquema de pruebas
+- `GET /health/`: proceso HTTP vivo; no accede a base de datos.
+- `GET /ready/`: ejecuta `SELECT 1`; devuelve solo estado genérico y no filtra errores ni credenciales.
+- `GET /api/infraestructura/`: versión, hora e identificador configurado; en Compose los valores `app1`/`app2` coinciden con cada servicio.
 
-| Tipo | Qué verifica | Ejemplos |
-|---|---|---|
-| Unitarias | Validadores, modelos, adaptadores (con `unittest.mock`) | `estudiantes/tests.py`, `servicios/tests*.py` |
-| Integración | Flujos completos con el cliente de pruebas de Django | `vacantes/tests.py`, `empresas/tests.py` |
-| Seguridad | Bloqueo, CSP, permisos por rol, CSRF, sesiones | `cuentas/tests_seguridad.py`, `core/tests_seguridad.py` |
-| API | Autenticación, permisos, filtros, límites, esquema OpenAPI | `api/tests.py` |
+## Interacciones funcionales
 
-Los servicios externos se simulan: las pruebas nunca llaman a Google, OpenStreetMap ni Resend. Ejecución: `python manage.py test`. Cobertura: `coverage run manage.py test && coverage report`. GitHub Actions ejecuta ambas en cada pull request y exige al menos 90 % de cobertura.
+Se conservan las apps Django, templates, modelos, autenticación, permisos por rol, API DRF, Swagger, mapas y comando `poblar_demo` importados de Unidad 3. La carga de CV existente se realiza en base de datos según la implementación fuente; no se depende de disco efímero para esos archivos.
