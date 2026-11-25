@@ -1,6 +1,13 @@
 # Guía de capturas para el documento PDF
 
-En PowerShell usa `curl.exe` (no `curl`, que es un alias de otro comando). Sustituye `SITIO` por la URL del sitio.
+Esta guía enumera evidencia académica auténtica y cómo obtenerla. No se generaron capturas de Vercel Production, Docker, balanceo o failover en este entorno: Vercel SSO bloquea visitantes anónimos y no hay Docker Engine/Compose instalado. No presentes capturas locales, pantallas SSO ni resultados de pruebas simulados como evidencia de producción. En PowerShell usa `curl.exe` (no `curl`, que es un alias de otro comando). Sustituye `SITIO` por el dominio público propio verificado en Vercel.
+
+## Habilitar primero la verificación pública
+
+1. En Vercel abre **Projects → despliegue-docker-conecta-utc → Settings → Domains → Add** y agrega un dominio que ya controles. Configura exactamente los registros DNS que Vercel muestra en el panel; no compres ni registres un dominio para esta entrega.
+2. En **Settings → Environment Variables**, agrega para Production `ALLOWED_HOSTS` con el hostname (sin `https://`) y `CSRF_TRUSTED_ORIGINS` con el origen completo HTTPS. Si se usan dos nombres, incluye ambos separados por coma en cada variable. No cambies ni copies el valor de `SECRET_KEY`.
+3. Conserva **Deployment Protection** en previews y en el hostname `.vercel.app`. La regla actual permite dominios personalizados sin Vercel SSO; si el panel no lo hace automáticamente, excluye solo el dominio personalizado y deja los previews protegidos. La aplicación sigue usando login y permisos de Django.
+4. Espera a que Domains muestre el registro verificado y certificado activo, y a que el nuevo deployment Production figure `Ready`. En ventana privada, sin sesión de Vercel, captura el dominio y repite las comprobaciones de salud, vacantes, Swagger y formularios.
 
 ## Mecanismos de seguridad
 

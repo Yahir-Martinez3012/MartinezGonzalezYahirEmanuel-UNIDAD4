@@ -60,9 +60,9 @@ La aplicación rechaza SQLite cuando `DEBUG=False`. En desarrollo local sin `DAT
 
 ## Vercel: producción distinta a Compose
 
-La plataforma documenta detección de Django desde `manage.py` y WSGI y crea runtime Python administrado. Esta configuración de Vercel no ejecuta Gunicorn permanente, Nginx, Docker Compose ni el PostgreSQL de Compose. Vercel ofrece TLS y escalado de funciones; Django conecta al `DATABASE_URL` PostgreSQL externo. Por la detección automática, no se agregó `vercel.json` innecesario.
+El proyecto `despliegue-docker-conecta-utc` está configurado en Vercel con runtime Python/Django y Neon PostgreSQL. Vercel no ejecuta el `docker-compose.yml`, Gunicorn permanente ni Nginx; esos componentes pertenecen al escenario local. El dominio estable del proyecto es <https://despliegue-docker-conecta-utc.vercel.app> y tiene TLS válido (TLS 1.3, certificado `*.vercel.app`); actualmente la protección SSO de Vercel bloquea visitantes anónimos. No se desactivó Deployment Protection ni se registró un dominio que no controla el equipo.
 
-En el estado de esta rama no hay proyecto Vercel asociado, deployment, dominio o certificado que podamos afirmar como operativos. La importación del repositorio y Neon conectados no completan esos pasos. Consulta `docs/DESPLIEGUE.md` para el procedimiento explícito; se necesita crear/vincular el proyecto Vercel, establecer variables de entorno y luego comprobar el deployment y dominio.
+Neon Production ya recibió las migraciones y `poblar_demo`; una comprobación de solo lectura confirmó PostgreSQL y 12 vacantes. GitHub Actions pasó para `v0/unidad4-infrastructure` (`600a5be`). El PR #1 integra esa rama a `main`; Vercel debe desplegar automáticamente el commit de `main` tras la fusión. La comprobación de las rutas de Django desde un navegador público sigue pendiente por SSO. Consulta `docs/DESPLIEGUE.md` y `docs/GUIA_DE_CAPTURAS.md` para el estado detallado y los pasos requeridos para hacer pública una URL.
 
 ## Pruebas
 
@@ -79,7 +79,7 @@ docker compose ps
 python scripts/probar_balanceador.py --requests 20
 ```
 
-GitHub Actions ejecuta checks, migraciones y pruebas contra PostgreSQL. La cifra de 140 pruebas aprobadas corresponde a Unidad 3 según el README de origen; no se presenta como resultado de ejecución de esta rama. Los resultados de Unidad 4 se documentarán solo al ejecutarse. Ver `docs/PRUEBAS.md`.
+GitHub Actions ejecuta checks, migraciones y pruebas contra PostgreSQL. La última ejecución local de Unidad 4 registró 143 pruebas aprobadas; GitHub Actions pasó para `600a5be`. El acceso de las rutas a través del runtime de Production sigue sin confirmarse porque Deployment Protection redirige a SSO. Ver `docs/PRUEBAS.md` para resultados y limitaciones actuales.
 
 ## Documentación y evidencias
 
@@ -93,18 +93,18 @@ GitHub Actions ejecuta checks, migraciones y pruebas contra PostgreSQL. La cifra
 
 | Requisito | Tecnología/configuración | Estado en esta rama | Evidencia |
 | --- | --- | --- | --- |
-| Base de aplicación U3 | Django apps/templates y modelos fuente | Importada; las 143 pruebas locales actuales pasan | Historial Git + suite |
-| Servidor app | Gunicorn en contenedores no root | Configurado; no se pudo iniciar Docker aquí | `Dockerfile`, Compose |
+| Base de aplicación U3 | Django apps/templates y modelos fuente | Importada; 143 pruebas locales aprobadas en esta ejecución | Historial Git + suite |
+| Servidor app | Gunicorn en contenedores no root | Dockerfile y Compose versionados; ejecución pendiente (Docker no instalado aquí) | `Dockerfile`, Compose |
 | PostgreSQL local | PostgreSQL 16 + volumen | Configurado; no ejecutado por falta de Docker | `docker-compose.yml` |
-| Migraciones | Servicio único `migrate` | Configurado; check de migraciones pasa, no aplicado a PostgreSQL | Compose y logs pendientes |
-| Balanceo | Nginx upstream Round Robin | Configurado; no se verificó distribución/failover | `nginx/default.conf`, script |
-| Health/ready | Django y consulta SQL sin filtrar secretos | Implementados y cubiertos por pruebas | `core/views.py`, tests (143 pasan) |
-| Seguridad | Entorno, cookies, proxy, HSTS, ignore rules | Checks deployment pasan con avisos HSTS documentados | `config/settings.py`, docs |
-| CI | GitHub Actions + PostgreSQL | Workflow configurado; primera ejecución remota pendiente | `.github/workflows/tests.yml` |
-| API, roles, mapas, Swagger | Implementación heredada de U3 | Conservada; suite Django completa pasa localmente | Código y suite |
-| Vercel/Dominio/TLS | Runtime Vercel + Neon | Pendiente; sin proyecto/dominio desplegado | `docs/DESPLIEGUE.md` |
-| HTTPS público | TLS administrado Vercel | Pendiente hasta deployment y dominio | `docs/EVIDENCIAS.md` |
-| Rendimiento/concurrencia | script stdlib de requests seriales | Pendiente; concurrencia moderada no ejecutada | `docs/PRUEBAS.md` |
+| Migraciones | Servicio único `migrate` | Ejecutadas en Neon Production; `migrate --check` pasó | Compose y comando Django |
+| Balanceo | Nginx upstream Round Robin | Configurado; distribución/failover sin verificar | `nginx/default.conf`, script |
+| Health/ready | Django y consulta SQL sin filtrar secretos | Implementados y cubiertos por tests; runtime productivo bloqueado por SSO | `core/views.py`, tests |
+| Seguridad | Entorno, cookies, proxy, HSTS, ignore rules | `SECRET_KEY` oculto configurado; se probó TLS 1.3 | `config/settings.py`, docs |
+| CI | GitHub Actions + PostgreSQL | Runs `45517869306` y `45517879097` aprobados para `600a5be` | `.github/workflows/tests.yml` |
+| API, roles, mapas, Swagger | Implementación heredada de U3 | Tests aprobados; producción no se verificó por SSO | Código y `docs/PRUEBAS.md` |
+| Vercel/Neon | Runtime Vercel + Neon | Proyecto y DB configurados; 12 vacantes comprobadas por conexión directa; runtime API pendiente | `docs/DESPLIEGUE.md` |
+| HTTPS público | TLS administrado Vercel | Certificado `.vercel.app` válido; SSO impide acceso anónimo | `docs/EVIDENCIAS.md` |
+| Rendimiento/concurrencia | script stdlib de requests seriales | No ejecutado; Docker ausente y prueba local sin Nginx | `docs/PRUEBAS.md` |
 
 ## Repositorios
 

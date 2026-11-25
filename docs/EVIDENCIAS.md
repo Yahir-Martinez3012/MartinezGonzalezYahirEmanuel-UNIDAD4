@@ -26,6 +26,8 @@ No se generaron capturas artificiales. Guarda capturas originales en `evidencias
 
 Para cada captura anota: `ID`, fecha/hora, nombre de evidencia, entorno (`local Docker`, `GitHub Actions`, `Vercel Production`), comando/URL, resultado literal y observación. Antes de entregar el PDF revisa que no aparezcan secretos, datos personales, tokens ni CV reales.
 
-## Evidencia disponible en este commit
+## Evidencia disponible en esta revisión
 
-La guía y la configuración versionada son evidencia documental, no prueba de que Docker, producción, DNS o TLS hayan sido ejecutados. Completa las capturas solo después de obtener resultados reales.
+Comprobaciones reales: GitHub Actions `45517869306` y `45517879097` en verde para `600a5be`; 143 tests Django locales aprobados; migraciones Neon Production aplicadas y 12 vacantes consultadas directamente; TLS del dominio `.vercel.app` válido. La URL estable sigue detrás de SSO; las rutas públicas no se verificaron. Docker/Compose no está instalado y el script de balanceador falló al no existir un servicio en `localhost:8080`; no hay evidencia de contenedores, balanceo ni failover.
+
+La guía y la configuración versionada son evidencia documental, no sustituyen capturas originales ni prueban una ejecución. Después de añadir un dominio propio y verificar las DNS, captura el navegador anónimo, las rutas Django y el certificado real. Ejecuta localmente las pruebas de Compose y balanceo indicadas en `GUIA_DE_CAPTURAS.md`; adjunta solo salidas literales. No presentes la página de SSO, una vista local ni resultados simulados como evidencia de producción.

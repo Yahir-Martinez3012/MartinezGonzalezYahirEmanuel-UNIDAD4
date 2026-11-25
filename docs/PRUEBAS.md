@@ -1,18 +1,15 @@
 # Pruebas y liberación
 
-## Resultados observados en esta rama
+## Resultados observados en esta ejecución
 
-Entorno: Python 3.13.18, dependencias instaladas en `.venv`, SQLite temporal, `DEBUG=False` y redirección HTTPS desactivada solo para el cliente de pruebas. Ejecutado el 24 de noviembre de 2026:
+Entorno de pruebas local: `.venv`, base de pruebas SQLite, `manage.py test`. Ejecución actual: **143 pruebas aprobadas**, 2.432 s, `OK`; Django reportó cero incidencias del system check. GitHub Actions para HEAD `600a5be0b9819956d5d50bb3d2a06c1dd7b7e25f` pasó en los runs `45517869306` y `45517879097`. No se afirma cobertura local de esta ejecución.
 
-- `python manage.py check`: aprobado, sin incidencias.
-- `python manage.py makemigrations --check --dry-run`: aprobado, no hay migraciones pendientes de generar.
-- `coverage run manage.py test`: **143 pruebas aprobadas**, incluyendo las rutas de salud añadidas.
-- `coverage report --fail-under=90`: aprobado, cobertura total **96%**.
-- `python manage.py check --deploy`: código 0; avisos de prueba por la clave temporal corta y `SECURE_SSL_REDIRECT=False` en el cliente HTTP de tests. No son valores de Production.
-- El navegador local cargó Inicio y `/vacantes/`; se mostraron 10 vacantes de demostración.
-- Vercel (consulta autenticada): `/health/` y `/ready/` devolvieron `200`; readiness indicó `database: available`. En Production, `showmigrations --plan` muestra las migraciones de Django sin aplicar.
-- GitHub Actions en el PR #1, run `45517706038` para `d33844b`, terminó en `success` después de configurar `SECURE_SSL_REDIRECT=False` exclusivamente para CI. El run anterior (`45332664231`) falló porque el cliente HTTP de Django seguía la redirección HTTPS de `DEBUG=False`.
-- Docker Engine/Compose no está instalado aquí. **No** se ejecutaron `docker compose config/build/up/ps`, PostgreSQL en contenedor, balanceo/failover ni concurrencia. La URL Vercel usa un certificado válido, pero la protección SSO impide verificar el sitio desde una sesión anónima.
+- Neon Production: migraciones aplicadas; `migrate --check` pasó. La conexión de solo lectura confirmó `DATABASE=connected`, `ENGINE=postgresql`, `VACANTES=12`. `poblar_demo` reportó 10 carreras, 24 habilidades, 5 empresas y 12 vacantes.
+- Vercel reporta Production deployment `READY` desde commit anterior `3f58298`; no es el HEAD actual. El dominio `.vercel.app` respondió `302` a SSO para las solicitudes externas, así que no se pudo verificar `/`, `/health/`, `/ready/`, `/vacantes/`, API, Swagger, login ni registro desde el runtime a través de su URL.
+- Los runtime logs previos a las migraciones muestran `500` en `/` por tabla de vacantes inexistente. Tras migrar no se logró una petición al runtime porque la capa SSO interceptó la solicitud. El estado de rutas del runtime sigue **pendiente**, no se infiere a partir de los tests o del acceso directo a Neon.
+- TLS probado con handshake Python `ssl`: TLS 1.3, wildcard `*.vercel.app`, Google Trust Services WR1, válido hasta 2027-01-29.
+- Docker Engine/Compose no está instalado (`docker: command not found`). El script de balanceador intentó 20 peticiones a `127.0.0.1:8080` y obtuvo 20 `URLError`; no hubo instancias en ese endpoint. Por ello no se verificaron build, contenedores, Round Robin, failover ni persistencia local.
+- `SECRET_KEY` aparece en Vercel Production como Secret oculto. El CLI deliberadamente no lo descargó y el proceso local recibió `SECRET_KEY_PRESENT=False`; la configuración de Vercel confirma que el secreto está asociado al entorno. No se mostró ni cambió su contenido. En el acceso de diagnóstico a Neon se empleó una clave efímera solo local.
 
 ## Verificación local
 
@@ -42,11 +39,11 @@ El script reporta el número de respuestas, fallos, instancias vistas y latencia
 
 | Caso | Verificación | Resultado observado |
 | --- | --- | --- |
-| Liveness y readiness | Tests Django y Vercel CLI autenticado | Aprobado: `/health/` y `/ready/` responden 200; DB disponible |
-| API, roles, autenticación, vacantes | `python manage.py test` | Aprobado: 143 pruebas locales, cobertura 96%; GitHub Actions run `45517706038` en success |
-| Migraciones | `makemigrations --check --dry-run`; `showmigrations --plan` en Production | Sin cambios de modelos; migraciones de Production pendientes de aplicar |
+| Liveness y readiness en Production | `/health/` y `/ready/` desde una sesión anónima | No verificados: SSO responde `302` antes de llegar a Django |
+| API, roles, autenticación, vacantes | `python manage.py test` y GitHub Actions | 143 pruebas locales OK; los dos runs de CI para `600a5be` pasaron; no equivale a prueba del runtime |
+| Neon Production | conexión Django de solo lectura; `migrate --check` | PostgreSQL conectado, 12 vacantes y cero migraciones pendientes |
 | Compose válido | `docker compose config` | No ejecutado: Docker/Compose no está instalado |
-| Dos instancias | Script a través de Nginx | No ejecutado: Docker no está disponible |
+| Dos instancias | Script a través de Nginx | No ejecutado; la tentativa a localhost:8080 terminó con 20 `URLError` |
 | Caída de una app | detener app1, repetir solicitudes | No ejecutado: Docker no está disponible |
-| TLS y acceso público | conexión TLS y solicitud anónima | Certificado TLS válido; acceso anónimo bloqueado por SSO; falta un dominio personalizado |
+| TLS y acceso público | handshake TLS y solicitud anónima | TLS 1.3 válido; acceso anónimo bloqueado por SSO; falta un dominio personalizado propio |
 | Concurrencia | carga moderada contra Compose | No ejecutado; no se inventan resultados |
