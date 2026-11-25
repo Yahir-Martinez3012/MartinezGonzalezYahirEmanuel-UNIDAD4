@@ -11,7 +11,7 @@ Entorno: Python 3.13.18, dependencias instaladas en `.venv`, SQLite temporal, `D
 - `python manage.py check --deploy`: código 0; avisos de prueba por la clave temporal corta y `SECURE_SSL_REDIRECT=False` en el cliente HTTP de tests. No son valores de Production.
 - El navegador local cargó Inicio y `/vacantes/`; se mostraron 10 vacantes de demostración.
 - Vercel (consulta autenticada): `/health/` y `/ready/` devolvieron `200`; readiness indicó `database: available`. En Production, `showmigrations --plan` muestra las migraciones de Django sin aplicar.
-- El workflow remoto del commit `3f58298` falló en tests porque `DEBUG=False` activa HTTPS redirect, incompatible con las solicitudes HTTP del cliente Django. El workflow se corrigió con `SECURE_SSL_REDIRECT=False` exclusivamente para CI; falta confirmar el nuevo run.
+- GitHub Actions en el PR #1, run `45517706038` para `d33844b`, terminó en `success` después de configurar `SECURE_SSL_REDIRECT=False` exclusivamente para CI. El run anterior (`45332664231`) falló porque el cliente HTTP de Django seguía la redirección HTTPS de `DEBUG=False`.
 - Docker Engine/Compose no está instalado aquí. **No** se ejecutaron `docker compose config/build/up/ps`, PostgreSQL en contenedor, balanceo/failover ni concurrencia. La URL Vercel usa un certificado válido, pero la protección SSO impide verificar el sitio desde una sesión anónima.
 
 ## Verificación local
@@ -43,7 +43,7 @@ El script reporta el número de respuestas, fallos, instancias vistas y latencia
 | Caso | Verificación | Resultado observado |
 | --- | --- | --- |
 | Liveness y readiness | Tests Django y Vercel CLI autenticado | Aprobado: `/health/` y `/ready/` responden 200; DB disponible |
-| API, roles, autenticación, vacantes | `python manage.py test` | Aprobado localmente: 143 pruebas, cobertura 96%; CI remoto pendiente de reejecución |
+| API, roles, autenticación, vacantes | `python manage.py test` | Aprobado: 143 pruebas locales, cobertura 96%; GitHub Actions run `45517706038` en success |
 | Migraciones | `makemigrations --check --dry-run`; `showmigrations --plan` en Production | Sin cambios de modelos; migraciones de Production pendientes de aplicar |
 | Compose válido | `docker compose config` | No ejecutado: Docker/Compose no está instalado |
 | Dos instancias | Script a través de Nginx | No ejecutado: Docker no está disponible |
