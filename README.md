@@ -40,7 +40,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Abre `http://localhost:8080/`. Healthchecks: `http://localhost:8080/health/` (proceso), `/ready/` (PostgreSQL) y `/api/infraestructura/` (etiqueta real configurada del contenedor). Swagger está en `/api/v1/docs/`, la API en `/api/v1/` y admin en `/admin/`.
+Abre `http://localhost:8080/`. Healthchecks: `http://localhost:8080/health/` (proceso), `/ready/` (PostgreSQL) y `/api/infraestructura/` (etiqueta real configurada del contenedor). Swagger está en `/api/v1/docs/`, el endpoint público de vacantes en `/api/v1/vacantes/` y admin en `/admin/`.
 
 Para probar distribución Round Robin observada, con `python` disponible en el host:
 
@@ -54,15 +54,15 @@ Datos ficticios: `docker compose exec app1 python manage.py poblar_demo`. Para c
 
 ## Configuración
 
-Variables Docker locales se documentan en `.env.example`. Nunca se suben `.env`, claves, contraseñas, tokens, CV ni datos reales. En Vercel configura `SECRET_KEY`, `DEBUG=False`, `DATABASE_URL` PostgreSQL gestionado, `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS` desde Settings. Activa reCAPTCHA y Resend únicamente con credenciales existentes. Los certificados TLS para el host Vercel son administrados por la plataforma.
+Variables Docker locales se documentan en `.env.example`. Nunca se suben `.env`, claves, contraseñas, tokens, CV ni datos reales. En Vercel Production están configurados `SECRET_KEY` (oculto), `DEBUG=False` y `DATABASE_URL` PostgreSQL gestionado. Para un dominio personalizado futuro, añade su hostname exacto a `ALLOWED_HOSTS` y su origen HTTPS a `CSRF_TRUSTED_ORIGINS`. Activa reCAPTCHA y Resend únicamente con credenciales existentes. Los certificados TLS para el host Vercel son administrados por la plataforma.
 
 La aplicación rechaza SQLite cuando `DEBUG=False`. En desarrollo local sin `DATABASE_URL`, settings conserva SQLite para compatibilidad de las pruebas existentes; en Docker se usa PostgreSQL. No apunta a la base de datos de Render de Unidad 3.
 
 ## Vercel: producción distinta a Compose
 
-El proyecto `despliegue-docker-conecta-utc` está configurado en Vercel con runtime Python/Django y Neon PostgreSQL. Vercel no ejecuta el `docker-compose.yml`, Gunicorn permanente ni Nginx; esos componentes pertenecen al escenario local. El dominio estable del proyecto es <https://despliegue-docker-conecta-utc.vercel.app> y tiene TLS válido (TLS 1.3, certificado `*.vercel.app`); actualmente la protección SSO de Vercel bloquea visitantes anónimos. No se desactivó Deployment Protection ni se registró un dominio que no controla el equipo.
+El proyecto `despliegue-docker-conecta-utc` usa runtime Python/Django y Neon PostgreSQL; el deployment Production `dpl_DBJsJESKVoF6TGDwwyARbSmJY7i7` quedó `READY` desde `main` en `381ce420`. La URL pública estable es <https://despliegue-docker-conecta-utc.vercel.app> (TLS 1.3, certificado `*.vercel.app`). Solicitudes HTTP anónimas sin cookies y un navegador en sesión aislada cargaron el sitio; no se desactivó Deployment Protection ni se necesitó dominio personalizado.
 
-Neon Production ya recibió las migraciones y `poblar_demo`; una comprobación de solo lectura confirmó PostgreSQL y 12 vacantes. GitHub Actions pasó para `v0/unidad4-infrastructure` (`600a5be`). El PR #1 integra esa rama a `main`; Vercel debe desplegar automáticamente el commit de `main` tras la fusión. La comprobación de las rutas de Django desde un navegador público sigue pendiente por SSO. Consulta `docs/DESPLIEGUE.md` y `docs/GUIA_DE_CAPTURAS.md` para el estado detallado y los pasos requeridos para hacer pública una URL.
+Neon Production recibió migraciones y `poblar_demo`; una consulta Django confirmó PostgreSQL y 12 filas de vacantes; el sitio muestra 10 vacantes publicadas. GitHub Actions para `main@381ce42` pasó. El acceso anónimo a la app funciona aunque una llamada `vercel curl` de inspección al deployment específico haya redirigido a SSO; esa respuesta no se reprodujo al solicitar la URL estable sin credenciales. Consulta `docs/DESPLIEGUE.md`, `docs/PRUEBAS.md` y `docs/GUIA_DE_CAPTURAS.md` para resultados y limitaciones.
 
 ## Pruebas
 
@@ -79,13 +79,13 @@ docker compose ps
 python scripts/probar_balanceador.py --requests 20
 ```
 
-GitHub Actions ejecuta checks, migraciones y pruebas contra PostgreSQL. La última ejecución local de Unidad 4 registró 143 pruebas aprobadas; GitHub Actions pasó para `600a5be`. El acceso de las rutas a través del runtime de Production sigue sin confirmarse porque Deployment Protection redirige a SSO. Ver `docs/PRUEBAS.md` para resultados y limitaciones actuales.
+GitHub Actions ejecuta checks, migraciones y pruebas contra PostgreSQL. La última ejecución local de Unidad 4 registró 143 pruebas aprobadas; GitHub Actions pasó para `main@381ce42` (run `45519292178`). Se verificaron anónimamente en Production los endpoints de salud, listado, REST y Swagger, además de las páginas GET de login y registro. Los flujos POST no se ejecutaron en producción para evitar crear usuarios de prueba; ver `docs/PRUEBAS.md`.
 
 ## Documentación y evidencias
 
 - `docs/ARQUITECTURA.md`: componentes Docker y topología real prevista para Vercel.
 - `docs/DESPLIEGUE.md`: Docker, producción y variables.
-- `docs/PRUEBAS.md`: comandos y resultados pendientes/aceptación.
+- `docs/PRUEBAS.md`: comandos, resultados observados y limitaciones pendientes.
 - `docs/SEGURIDAD.md`: controles y secretos.
 - `docs/EVIDENCIAS.md`: guía precisa de capturas auténticas, sin exponer información sensible.
 
@@ -98,12 +98,12 @@ GitHub Actions ejecuta checks, migraciones y pruebas contra PostgreSQL. La últi
 | PostgreSQL local | PostgreSQL 16 + volumen | Configurado; no ejecutado por falta de Docker | `docker-compose.yml` |
 | Migraciones | Servicio único `migrate` | Ejecutadas en Neon Production; `migrate --check` pasó | Compose y comando Django |
 | Balanceo | Nginx upstream Round Robin | Configurado; distribución/failover sin verificar | `nginx/default.conf`, script |
-| Health/ready | Django y consulta SQL sin filtrar secretos | Implementados y cubiertos por tests; runtime productivo bloqueado por SSO | `core/views.py`, tests |
-| Seguridad | Entorno, cookies, proxy, HSTS, ignore rules | `SECRET_KEY` oculto configurado; se probó TLS 1.3 | `config/settings.py`, docs |
-| CI | GitHub Actions + PostgreSQL | Runs `45517869306` y `45517879097` aprobados para `600a5be` | `.github/workflows/tests.yml` |
-| API, roles, mapas, Swagger | Implementación heredada de U3 | Tests aprobados; producción no se verificó por SSO | Código y `docs/PRUEBAS.md` |
-| Vercel/Neon | Runtime Vercel + Neon | Proyecto y DB configurados; 12 vacantes comprobadas por conexión directa; runtime API pendiente | `docs/DESPLIEGUE.md` |
-| HTTPS público | TLS administrado Vercel | Certificado `.vercel.app` válido; SSO impide acceso anónimo | `docs/EVIDENCIAS.md` |
+| Health/ready | Django y consulta SQL sin filtrar secretos | `/health/` y `/ready/` anónimos dieron 200; readiness informó DB disponible | `core/views.py`, pruebas Production |
+| Seguridad | Entorno, cookies, proxy, HSTS, ignore rules | `SECRET_KEY` oculto configurado; TLS 1.3 validado; dominio estable público | `config/settings.py`, docs |
+| CI | GitHub Actions + PostgreSQL | Run `45519292178` pasó para `main@381ce42` | `.github/workflows/tests.yml` |
+| API, roles, mapas, Swagger | Implementación heredada de U3 | API de vacantes y Swagger cargaron en Production; 143 tests cubren flujos; no se ejecutaron formularios POST en Production | Código y `docs/PRUEBAS.md` |
+| Vercel/Neon | Runtime Vercel + Neon | Deployment `READY` desde main; DB PostgreSQL; 12 vacantes en BD y 10 publicadas | `docs/DESPLIEGUE.md` |
+| HTTPS público | TLS administrado Vercel | Certificado `.vercel.app` válido y URL estable accesible anónimamente | `docs/EVIDENCIAS.md` |
 | Rendimiento/concurrencia | script stdlib de requests seriales | No ejecutado; Docker ausente y prueba local sin Nginx | `docs/PRUEBAS.md` |
 
 ## Repositorios
@@ -111,4 +111,4 @@ GitHub Actions ejecuta checks, migraciones y pruebas contra PostgreSQL. La últi
 - Unidad 4: https://github.com/Yahir-Martinez3012/MartinezGonzalezYahirEmanuel-UNIDAD4
 - Unidad 3 (solo fuente de importación; no se modifica): https://github.com/Yahir-Martinez3012/MartinezGonzalezYahirEmanuel-UNIDAD3
 
-La URL pública sugerida `conecta-utc-unidad4.vercel.app` es solo propuesta y no se afirma disponible/asignada. Consulta `docs/EVIDENCIAS.md` para completar evidencias académicas verificables.
+La URL pública estable actualmente asignada es <https://despliegue-docker-conecta-utc.vercel.app>. Consulta `docs/EVIDENCIAS.md` y `docs/GUIA_DE_CAPTURAS.md` para completar las evidencias académicas verificables.

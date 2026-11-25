@@ -17,26 +17,25 @@ Compose usa un secreto fuerte requerido al levantar el servicio, sin valor prede
 
 Vercel detecta Django desde `manage.py` y `config.wsgi`; el runtime de producción es administrado. Docker Compose, PostgreSQL local y Nginx son una infraestructura reproducible separada y **no** se ejecutan en Vercel. El proyecto Vercel existente es `despliegue-docker-conecta-utc` (`prj_wyBdQZlH6Aep8W3VC6q7else6Nk5`) y las variables de Neon están asociadas a Production, Preview y Development. No se modifica el servicio original de Render.
 
-### Estado comprobado (24–25 de noviembre de 2026)
+### Estado comprobado (25 de noviembre de 2026)
 
-- Proyecto Vercel `despliegue-docker-conecta-utc`, ID `prj_wyBdQZlH6Aep8W3VC6q7else6Nk5`. El último deployment de Production observado antes de fusionar el PR fue `dpl_EhpyG2oFF4TdF7LuWv4iHt5BEuPD`, `READY`, originado desde `v0/unidad4-infrastructure` en `3f58298`; por tanto no representa todavía el HEAD actual de la rama.
-- URL estable asignada: <https://despliegue-docker-conecta-utc.vercel.app>. TLS negociado: TLS 1.3; certificado `*.vercel.app`, emisor Google Trust Services WR1, fecha de expiración 29 de enero de 2027.
-- Deployment Protection aplica SSO a los dominios `.vercel.app`; el intento anónimo responde `302` a Vercel SSO. No hay dominio personalizado registrado y no se desactivó la protección. Las rutas de aplicación no se pudieron verificar públicamente bajo esta restricción.
-- Neon Production: `migrate --noinput` terminó correctamente; `poblar_demo` informó 10 carreras, 24 habilidades, 5 empresas y 12 vacantes. Una conexión de solo lectura usando el entorno Production confirmó `ENGINE=postgresql`, 12 filas de vacantes y `migrate --check` sin migraciones pendientes. Esto verifica el acceso de esta sesión a Neon; las rutas del runtime quedan sin verificación mientras SSO intercepta el tráfico.
-- Los logs anteriores a la migración registraron `500` en `/` por ausencia de `vacantes_vacante`; la tabla ya fue creada por las migraciones. No se hizo una petición de aplicación posterior porque SSO detuvo la prueba.
-- La rama `v0/unidad4-infrastructure` (`600a5be`) tiene GitHub Actions en verde y el PR #1 hacia `main` está limpio y fusionable. La producción debe reconstruirse desde `main` después de la fusión; confirme el deployment resultante en Vercel.
-- `SECRET_KEY` figura en las variables Production como tipo Secret/oculto. Vercel no permite descargar ese secreto mediante `env run`, de ahí la advertencia local; su ausencia en la shell local no significa que falte en el runtime. No se imprimió, regeneró ni modificó su valor. Para operaciones locales solo se empleó una clave efímera no secreta.
-- Docker Engine/Compose no está instalado en el entorno de trabajo (`docker: command not found`); no se simularon contenedores ni resultados de balanceo.
+- Proyecto Vercel `despliegue-docker-conecta-utc`, ID `prj_wyBdQZlH6Aep8W3VC6q7else6Nk5`. El deployment Production `dpl_DBJsJESKVoF6TGDwwyARbSmJY7i7` quedó `READY` desde `main`, commit `381ce4204532c4e4c44663322da72bf1927de5cf`; alias estable: <https://despliegue-docker-conecta-utc.vercel.app>.
+- TLS confirmado por handshake externo: TLS 1.3, `*.vercel.app`, Google Trust Services WR1, vence el 29 de enero de 2027.
+- Solicitudes anónimas sin cookies a la URL estable dieron `200` en `/`, `/health/`, `/ready/`, `/vacantes/`, `/api/v1/vacantes/`, `/api/v1/docs/`, `/cuentas/login/` y `/cuentas/registro/`. `/ready/` devolvió `database: available`; el listado web muestra 10 vacantes publicadas y 4 empresas. Swagger se renderizó con operaciones. `/api/v1/` como raíz no está definido y responde `404`; los endpoints REST específicos sí funcionan. No se envió formulario de login/registro ni se creó una cuenta de prueba en Production.
+- `vercel curl` contra la URL de deployment específica redirigió a SSO; la prueba anónima directa contra el alias estable (Python urllib y navegador aislado, sin cookies) sí cargó Django. No se desactivó Deployment Protection ni hace falta intervención para hacer público el alias actual.
+- Neon Production: `migrate --noinput` terminó correctamente; `poblar_demo` sin `--usuarios` informó 10 carreras, 24 habilidades, 5 empresas y 12 vacantes. Una consulta Django de solo lectura confirmó `ENGINE=postgresql`, 12 filas de vacantes y `migrate --check` sin cambios pendientes. Los datos vienen de la base productiva.
+- Los logs anteriores a la migración registraron `500` en `/` por ausencia de `vacantes_vacante`; después de migrar, el deployment de `main` cargó y se verificaron las páginas y rutas públicas indicadas.
+- PR #1 fusionado; commit de merge `381ce42`. GitHub Actions `45519292178` para `main` terminó `success`.
+- `SECRET_KEY` está configurada en Production como Secret oculto. `vercel env run` no la descarga a procesos locales (la prueba mostró `SECRET_KEY_PRESENT=False` en local), pero las páginas Django y endpoints anónimos de Production respondieron, señal de que el runtime ejecuta correctamente con su configuración. No se imprimió, regeneró ni modificó su valor. La advertencia es sobre descarga local deliberadamente restringida, no una configuración incompleta del runtime.
+- Docker Engine/Compose no está instalado aquí (`docker: command not found`). El script local de balanceador intentó 20 peticiones a `localhost:8080` y obtuvo 20 `URLError`; no hubo contenedores para balancear.
 
-#### Publicar sin Vercel SSO en la aplicación
+#### Dominio, acceso público y protección
 
-No desactive Deployment Protection globalmente. Desde el panel Vercel, abra el proyecto `despliegue-docker-conecta-utc` → **Settings → Domains → Add** y agregue un dominio propio que controle. Configure en el registrador los registros DNS que Vercel indique; espere a que el dominio figure como verificado y el certificado TLS como activo. Mantenga protegidos los previews y el hostname `.vercel.app`; con la configuración actual, los dominios personalizados se excluyen de SSO. Compruebe después las páginas y API con una ventana privada, sin sesión de Vercel. Si el proyecto no excluye automáticamente el dominio personalizado, ajuste el alcance de Deployment Protection solo para ese dominio, manteniendo protegidos los previews. La autenticación de usuarios de Django permanece independiente.
+El alias estable `.vercel.app` ya es accesible anónimamente; no es necesario desactivar SSO global ni contratar/registrar otro dominio. Para comprobarlo de forma reproducible usa una ventana privada o una sesión nueva sin cookies y abre el alias estable. Si se añade un dominio propio en el futuro: **Settings → Domains → Add**, configura los DNS indicados por Vercel y espera `Valid Configuration` y el certificado activo; agrega el hostname exacto a `ALLOWED_HOSTS` y su origen HTTPS a `CSRF_TRUSTED_ORIGINS` en Environment Variables (Production). Mantén los previews protegidos y Django conserva su propia autenticación.
 
-No puedo asignar un dominio público final sin que el propietario proporcione uno que controle y configure sus DNS. No registre un dominio ajeno ni incurra en compra/servicio pagado; puede usar uno existente o un dominio gratuito disponible bajo su cuenta.
+#### Operaciones de Neon realizadas
 
-#### Operaciones de Neon ya realizadas
-
-Las migraciones se ejecutaron una vez contra el `DATABASE_URL` de Production y el seed se ejecutó sin `--usuarios`. No vuelva a apuntar esos comandos a Render (Unidad 3), no active `--usuarios` en producción y no ejecute migraciones desde cada instancia web.
+Las migraciones se ejecutaron una vez contra el `DATABASE_URL` de Production y el seed se ejecutó sin `--usuarios`. No apuntes esos comandos a Render (Unidad 3), no actives `--usuarios` en producción y no ejecutes migraciones desde cada instancia web.
 
 ## Variables
 
@@ -45,9 +44,9 @@ Las migraciones se ejecutaron una vez contra el `DATABASE_URL` de Production y e
 | `SECRET_KEY` | Sí | Firma Django; fuera de código y Git |
 | `DEBUG` | Sí en producción | Siempre `False` |
 | `DATABASE_URL` | Sí en producción | PostgreSQL gestionado; TLS por proveedor |
-| `ALLOWED_HOSTS` | Sí | Hosts exactos aceptados por Django |
-| `CSRF_TRUSTED_ORIGINS` | Sí | Orígenes HTTPS del dominio publicado |
+| `ALLOWED_HOSTS` | Para dominios personalizados | Hostnames exactos aceptados por Django; el runtime Vercel añade sus propios hosts asignados |
+| `CSRF_TRUSTED_ORIGINS` | Para dominios personalizados | Orígenes HTTPS exactos del dominio propio |
 | `POSTGRES_PASSWORD` | Docker local | Credencial de la instancia local |
 | `RECAPTCHA_*`, `RESEND_API_KEY` | Opcionales | Solo activar con credenciales válidas |
 
-No se ha conectado ni desplegado Vercel desde esta operación: el chat no estaba vinculado a un proyecto Vercel. La importación GitHub y el servicio Neon conectados por sí solos no crean dominio ni permiten afirmar que el sitio está en línea.
+Vercel ya está conectado y el deployment Production de `main` está `READY`. El alias estable es público; no hace falta dominio personalizado para acceder a la aplicación actual. Para un dominio propio futuro, sigue los pasos anteriores y actualiza `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS`.
