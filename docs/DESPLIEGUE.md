@@ -15,13 +15,19 @@ Compose usa un secreto fuerte requerido al levantar el servicio, sin valor prede
 
 ## Vercel + Neon
 
-Vercel soporta detección/despliegue Django desde `manage.py` y la configuración WSGI; el archivo `vercel.json` no es necesario para la configuración predeterminada. En producción, el runtime es administrado: Docker Compose, PostgreSQL local y Nginx no se ejecutan en Vercel. Los certificados HTTPS del dominio asignado son administrados por Vercel.
+Vercel detecta Django desde `manage.py` y `config.wsgi`; el runtime de producción es administrado. Docker Compose, PostgreSQL local y Nginx son una infraestructura reproducible separada y **no** se ejecutan en Vercel. El proyecto Vercel existente es `despliegue-docker-conecta-utc` (`prj_wyBdQZlH6Aep8W3VC6q7else6Nk5`) y las variables de Neon están asociadas a Production, Preview y Development. No se modifica el servicio original de Render.
 
-Para habilitar producción: en Vercel importa `Yahir-Martinez3012/MartinezGonzalezYahirEmanuel-UNIDAD4`, selecciona raíz del proyecto y conecta Neon mediante la integración. Configura `SECRET_KEY` (secreto aleatorio), `DEBUG=False`, `DATABASE_URL` (Neon, con TLS/`sslmode=require`), `ALLOWED_HOSTS` con el host asignado y `CSRF_TRUSTED_ORIGINS` con su origen HTTPS. Habilita las variables en Production y Preview según corresponda. Deja que Vercel detecte Django y su comando de build; revisa los logs antes de cambiar comandos.
+### Estado comprobado (24 de noviembre de 2026)
 
-Después de crear/importar el proyecto, añade el dominio `conecta-utc-unidad4.vercel.app` solo si Vercel confirma disponibilidad; en caso contrario elige el dominio disponible que Vercel ofrezca. No se ha configurado ni comprobado ese dominio desde esta rama. Al asignarlo, espera a que Vercel indique certificado válido y prueba `/`, `/health/`, `/ready/`, `/vacantes/`, `/api/v1/`, `/api/v1/docs/` y `/admin/`.
+- Despliegue Vercel `dpl_EhpyG2oFF4TdF7LuWv4iHt5BEuPD`, estado `READY`, desde `v0/unidad4-infrastructure`, commit `3f58298ebaff24dbf686f1d7044129551a36f321`.
+- URL del proyecto: <https://despliegue-docker-conecta-utc.vercel.app>. También se asignó TLS 1.3 con certificado `*.vercel.app`, válido hasta el 29 de enero de 2027.
+- Protección del proyecto: SSO para todos los dominios excepto dominios personalizados; no se encontró ningún dominio personalizado conectado. Por ello esta URL no es pública para visitantes anónimos. No se desactivó la protección.
+- Las comprobaciones autenticadas por CLI de `/health/` y `/ready/` respondieron `200`; `/ready/` confirmó acceso a la base. El `showmigrations --plan` de Production mostró todas las migraciones de Django sin aplicar. La raíz respondió `500` antes de aplicar esas migraciones; la carga de datos demo tampoco se ha ejecutado en producción.
+- GitHub `main` aún apunta a `287f468dfcba8ba55e552797933345f48c87f5ac`; los cambios están en la rama de trabajo hasta que se integre su pull request.
 
-Ejecuta migraciones de Django como una operación controlada sobre la base de Unidad 4, una vez confirmada la conexión y el destino. No apuntes migraciones al PostgreSQL de Render de Unidad 3. Para nuevos despliegues, integra un paso previo de migración único; no hagas que cada instancia web migre en paralelo.
+Para hacer pública la app manteniendo SSO en previews, se necesita asociar a este proyecto un dominio personalizado que controles (Vercel excluye esos dominios de la protección actual). No se debe inventar ni registrar un dominio ajeno. Una vez asociado, valida el certificado y las rutas `/`, `/health/`, `/ready/`, `/vacantes/`, `/api/v1/`, `/api/v1/docs/` y `/admin/` desde un navegador no autenticado.
+
+Una vez autorizado el cambio de producción, aplicar `python manage.py migrate --noinput` y después `python manage.py poblar_demo` mediante un proceso único conectado al `DATABASE_URL` de Production. El comando de demo es idempotente y sin `--usuarios` crea usuarios de empresa con contraseña inutilizable; no crea credenciales débiles de acceso. No ejecutar `--usuarios` en producción. No apuntar migraciones al PostgreSQL de Render de Unidad 3 ni hacer que cada instancia web migre en paralelo.
 
 ## Variables
 

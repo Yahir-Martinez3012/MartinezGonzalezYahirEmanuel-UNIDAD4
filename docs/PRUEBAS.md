@@ -2,16 +2,17 @@
 
 ## Resultados observados en esta rama
 
-Entorno: Python 3.13.17, dependencias instaladas en `.venv`, SQLite de pruebas local. Ejecutado el 23 de noviembre de 2026:
+Entorno: Python 3.13.18, dependencias instaladas en `.venv`, SQLite temporal, `DEBUG=False` y redirección HTTPS desactivada solo para el cliente de pruebas. Ejecutado el 24 de noviembre de 2026:
 
 - `python manage.py check`: aprobado, sin incidencias.
 - `python manage.py makemigrations --check --dry-run`: aprobado, no hay migraciones pendientes de generar.
 - `coverage run manage.py test`: **143 pruebas aprobadas**, incluyendo las rutas de salud añadidas.
 - `coverage report --fail-under=90`: aprobado, cobertura total **96%**.
-- `python manage.py check --deploy`: terminó con código 0 y dos avisos deliberados: `security.W005` (no se afirma que todo subdominio sea HTTPS) y `security.W021` (no se activa preload HSTS para un host todavía no asignado). Sin errores.
-- Parseo YAML de `docker-compose.yml` con PyYAML: válido y contiene `db`, `migrate`, `app1`, `app2`, `nginx`.
-
-Docker Engine/Compose no está instalado en este entorno; por ello **no** se ejecutaron `docker compose config/build/up/ps`, PostgreSQL real, balanceo/failover, concurrencia, dominio ni TLS. La comprobación YAML no sustituye `docker compose config`. GitHub Actions está configurado, pero su ejecución remota solo se conocerá tras subir la rama.
+- `python manage.py check --deploy`: código 0; avisos de prueba por la clave temporal corta y `SECURE_SSL_REDIRECT=False` en el cliente HTTP de tests. No son valores de Production.
+- El navegador local cargó Inicio y `/vacantes/`; se mostraron 10 vacantes de demostración.
+- Vercel (consulta autenticada): `/health/` y `/ready/` devolvieron `200`; readiness indicó `database: available`. En Production, `showmigrations --plan` muestra las migraciones de Django sin aplicar.
+- El workflow remoto del commit `3f58298` falló en tests porque `DEBUG=False` activa HTTPS redirect, incompatible con las solicitudes HTTP del cliente Django. El workflow se corrigió con `SECURE_SSL_REDIRECT=False` exclusivamente para CI; falta confirmar el nuevo run.
+- Docker Engine/Compose no está instalado aquí. **No** se ejecutaron `docker compose config/build/up/ps`, PostgreSQL en contenedor, balanceo/failover ni concurrencia. La URL Vercel usa un certificado válido, pero la protección SSO impide verificar el sitio desde una sesión anónima.
 
 ## Verificación local
 
@@ -35,17 +36,17 @@ El script reporta el número de respuestas, fallos, instancias vistas y latencia
 
 ## Integración continua
 
-`.github/workflows/tests.yml` ejecuta las comprobaciones Django y pruebas con PostgreSQL administrado como servicio efímero del runner. La prueba de `check --deploy` usa valores de test del job, no secretos de producción. Verifica estado de Actions y logs antes de liberar.
+`.github/workflows/tests.yml` ejecuta las comprobaciones Django y pruebas con PostgreSQL administrado como servicio efímero del runner. `SECURE_SSL_REDIRECT=False` solo en este job evita redirecciones que invalidan el cliente de tests; no modifica los ajustes de producción. `check --deploy` usa valores de test, no secretos productivos. Confirma el estado del workflow más reciente antes de liberar.
 
 ## Matriz de aceptación
 
-| Caso | Verificación | Resultado en este cambio |
+| Caso | Verificación | Resultado observado |
 | --- | --- | --- |
-| Liveness y readiness | Pruebas Django para `/health/`, `/ready/` | Pendiente de ejecución |
-| API, roles, autenticación, vacantes | `python manage.py test` | Pendiente de ejecución |
-| Migraciones | `makemigrations --check --dry-run` | Pendiente de ejecución |
-| Compose válido | `docker compose config` | Pendiente; requiere Docker disponible |
-| Dos instancias | Script a través de Nginx | Pendiente; requiere Docker |
-| Caída de una app | detener app1, repetir solicitudes | Pendiente; requiere Docker |
-| TLS/dominio público | navegador/`curl` al host real | Pendiente; no hay dominio asignado |
-| Concurrencia | carga moderada (wrk/ab/hey) contra Compose | Pendiente; no se inventan resultados |
+| Liveness y readiness | Tests Django y Vercel CLI autenticado | Aprobado: `/health/` y `/ready/` responden 200; DB disponible |
+| API, roles, autenticación, vacantes | `python manage.py test` | Aprobado localmente: 143 pruebas, cobertura 96%; CI remoto pendiente de reejecución |
+| Migraciones | `makemigrations --check --dry-run`; `showmigrations --plan` en Production | Sin cambios de modelos; migraciones de Production pendientes de aplicar |
+| Compose válido | `docker compose config` | No ejecutado: Docker/Compose no está instalado |
+| Dos instancias | Script a través de Nginx | No ejecutado: Docker no está disponible |
+| Caída de una app | detener app1, repetir solicitudes | No ejecutado: Docker no está disponible |
+| TLS y acceso público | conexión TLS y solicitud anónima | Certificado TLS válido; acceso anónimo bloqueado por SSO; falta un dominio personalizado |
+| Concurrencia | carga moderada contra Compose | No ejecutado; no se inventan resultados |

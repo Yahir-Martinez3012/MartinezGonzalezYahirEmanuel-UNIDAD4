@@ -32,6 +32,7 @@ jobs:
       DATABASE_URL: postgres://conecta:ci-password-only@127.0.0.1:5432/conecta_test
       ALLOWED_HOSTS: localhost,127.0.0.1,testserver
       CSRF_TRUSTED_ORIGINS: https://localhost
+      SECURE_SSL_REDIRECT: 'False'
     steps:
       - uses: actions/checkout@v4
 
